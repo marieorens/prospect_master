@@ -164,7 +164,7 @@ Récupère le statut d'un processus en cours.
 
 ```bash
 # Paramètres généraux
-HEADLESS=true                 # Mode navigateur (true/false)
+HEADLESS=false                # Mode navigateur (true/false)
 CONCURRENCY=2                 # Nb de processus parallèles
 REQUEST_TIMEOUT_MS=30000      # Timeout par requête
 SESSION_DIR=./sessions        # Répertoire sessions navigateur

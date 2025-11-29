@@ -97,35 +97,6 @@ export default function Home() {
   if (showModeSelector && stats.totalDomains === 0) {
     return <ModeSelector />;
   }
-          if (domain.emails) {
-            totalEmails += domain.emails.length;
-            validEmails += domain.emails.filter(e => e.is_valid).length;
-          }
-        });
-        
-        // Estimate total based on sample
-        const emailsPerDomain = totalEmails / detailedDomains.length || 0;
-        const estimatedTotalEmails = Math.round(emailsPerDomain * totalDomains);
-        const validEmailsRatio = validEmails / totalEmails || 0;
-        const estimatedValidEmails = Math.round(estimatedTotalEmails * validEmailsRatio);
-        
-        setStats({
-          totalDomains,
-          scrapedDomains,
-          totalEmails: estimatedTotalEmails,
-          validEmails: estimatedValidEmails,
-        });
-        
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-        setError(error.message);
-        setLoading(false);
-      }
-    };
-    
-    fetchStats();
-  }, []);
   
   // Quick actions
   const quickActions = [

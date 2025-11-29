@@ -11,21 +11,6 @@ const db = new sqlite3.Database(dbFile);
 console.log('🚀 Migration des tables de campagnes email...');
 
 db.serialize(() => {
-  // Table des templates d'emails
-  db.run(`
-    CREATE TABLE IF NOT EXISTS email_templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      description TEXT,
-      subject TEXT NOT NULL,
-      body TEXT NOT NULL,
-      variables JSON, -- Variables dynamiques disponibles
-      category TEXT DEFAULT 'custom', -- cold_email, follow_up, thank_you, etc.
-      is_default INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
 
   // Table des campagnes
   db.run(`
@@ -78,28 +63,6 @@ db.serialize(() => {
       -- Tracking
       sent_at DATETIME,
       delivered_at DATETIME,
-      opened_at DATETIME,
-      clicked_at DATETIME,
-      replied_at DATETIME,
-      bounced_at DATETIME,
-      
-      -- Métadonnées
-      open_count INTEGER DEFAULT 0,
-      click_count INTEGER DEFAULT 0,
-      last_activity DATETIME,
-      
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      
-      FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
-      FOREIGN KEY(domain_id) REFERENCES domains(id) ON DELETE CASCADE,
-      FOREIGN KEY(email_id) REFERENCES emails(id) ON DELETE CASCADE
-    )
-  `);
-
-  // Table des événements de tracking
-  db.run(`
-    CREATE TABLE IF NOT EXISTS campaign_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
       campaign_id INTEGER,
       recipient_id INTEGER,
       
@@ -261,14 +224,35 @@ Je reste à votre disposition pour toute question.
 db.serialize(() => {
   console.log('👥 Création des groupes par défaut...');
   
-  db.run(`
-    INSERT OR IGNORE INTO prospect_groups (id, name, description, color)
-    VALUES (1, 'Tous les prospects', 'Groupe par défaut contenant tous les prospects', '#6B7280')
-  `);
-
-  console.log('✅ Groupes par défaut créés');
+  // Vérifier si la colonne 'color' existe, sinon l'ajouter
+  db.all("PRAGMA table_info(prospect_groups)", (err, columns) => {
+    if (err) {
+      console.error('Erreur lors de la vérification de la table prospect_groups:', err);
+      return;
+    }
+    const hasColor = columns.some(col => col.name === 'color');
+    if (!hasColor) {
+      db.run("ALTER TABLE prospect_groups ADD COLUMN color TEXT DEFAULT '#3B82F6'", (alterErr) => {
+        if (alterErr) {
+          console.error('Erreur lors de l\'ajout de la colonne color:', alterErr);
+        } else {
+          console.log('✅ Colonne color ajoutée à prospect_groups');
+        }
+        // Insérer le groupe par défaut après avoir ajouté la colonne
+        db.run(`
+          INSERT OR IGNORE INTO prospect_groups (id, name, description, color)
+          VALUES (1, 'Tous les prospects', 'Groupe par défaut contenant tous les prospects', '#6B7280')
+        `);
+        console.log('✅ Groupes par défaut créés');
+      });
+    } else {
+      // La colonne existe déjà, on peut insérer le groupe
+      db.run(`
+        INSERT OR IGNORE INTO prospect_groups (id, name, description, color)
+        VALUES (1, 'Tous les prospects', 'Groupe par défaut contenant tous les prospects', '#6B7280')
+      `);
+      console.log('✅ Groupes par défaut créés');
+    }
+  });
 });
 
-db.close(() => {
-  console.log('🎉 Migration des campagnes email terminée avec succès !');
-});

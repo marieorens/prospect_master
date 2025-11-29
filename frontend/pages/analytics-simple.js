@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Layout from '../components/Layout';
 import { 
   FiTrendingUp, FiMail, FiEye, FiMousePointer, FiUsers, 
-  FiBarChart3, FiActivity, FiInfo 
+  FiBarChart, FiActivity, FiInfo 
 } from 'react-icons/fi';
 
 // Composant Demo Simple sans imports externes
@@ -40,7 +40,7 @@ const SimpleDemoAnalytics = () => {
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
           {[
-            { id: 'overview', name: 'Vue d\'ensemble', icon: FiBarChart3 },
+            { id: 'overview', name: 'Vue d\'ensemble', icon: FiBarChart },
             { id: 'performance', name: 'Performance', icon: FiTrendingUp }
           ].map((tab) => (
             <button

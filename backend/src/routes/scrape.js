@@ -61,35 +61,33 @@ async function processDomain(domain, jobId, processId = null) {
     db.prepare('UPDATE job_domains SET status = ? WHERE job_id = ? AND domain_id = (SELECT id FROM domains WHERE domain = ?)')
       .run('processing', jobId, domain);
     
-    // Step 1: Scrape SEMrush data
+    // Step 1: Scrape SEMrush data via RankerFox
     let semrushData;
     try {
       if (processId) {
-        feedbackManager.updateStep(processId, `📊 Analyse SEMrush: ${domain}`);
+        feedbackManager.updateStep(processId, `📊 Analyse SEMrush (via RankerFox): ${domain}`);
       }
-      
-      semrushData = await scrapeDomainOnSemrush(domain);
-      logger.info(`SEMrush data for ${domain}:`, semrushData);
-      
+      // Utilisation du nouveau service
+      const { scrapeSemrushViaRankerFox } = require('../services/scrapers/rankerfoxSemrushScraper');
+      semrushData = await scrapeSemrushViaRankerFox(domain);
+      logger.info(`SEMrush data for ${domain} (via RankerFox):`, semrushData);
       if (processId) {
         feedbackManager.updateStep(processId, `✅ SEMrush OK: ${domain} (trafic: ${semrushData.traffic || 'N/A'}, backlinks: ${semrushData.backlinks || 'N/A'})`);
       }
-      
       // Update domain with SEMrush data
       db.prepare(`
         UPDATE domains 
         SET semrush_url = ?, traffic = ?, backlinks = ?, keywords = ?
         WHERE domain = ?
       `).run(
-        semrushData.semrush_url || null,
+        null,
         semrushData.traffic || null,
         semrushData.backlinks || null,
         semrushData.keywords || null,
         domain
       );
     } catch (semrushError) {
-      logger.error(`SEMrush scraping error for ${domain}:`, semrushError);
-      
+      logger.error(`SEMrush scraping error for ${domain} (via RankerFox):`, semrushError);
       // Update domain with error
       db.prepare(`
         UPDATE domains 
@@ -97,20 +95,17 @@ async function processDomain(domain, jobId, processId = null) {
         WHERE domain = ?
       `).run(
         'semrush_error',
-        semrushError.message || 'SEMrush scraping failed',
+        semrushError.message || 'SEMrush scraping failed (via RankerFox)',
         domain
       );
-      
       // Update job domain status
       db.prepare(`
         UPDATE job_domains 
         SET status = ? 
         WHERE job_id = ? AND domain_id = (SELECT id FROM domains WHERE domain = ?)
       `).run('failed', jobId, domain);
-      
       // Update job stats
       updateJobStats(jobId);
-      
       db.close();
       return;
     }

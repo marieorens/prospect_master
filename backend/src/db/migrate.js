@@ -115,17 +115,13 @@ db.serialize(() => {
 
   db.run(`
     CREATE TABLE IF NOT EXISTS ab_test_variants (
-      id TEXT PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       test_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      subject_line TEXT,
-      content TEXT,
-      weight REAL DEFAULT 0.5,
-      total_sent INTEGER DEFAULT 0,
-      total_opened INTEGER DEFAULT 0,
-      total_clicked INTEGER DEFAULT 0,
-      total_bounced INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      variant_name TEXT NOT NULL,
+      subject_line TEXT NOT NULL,
+      email_content TEXT NOT NULL,
+      allocation_percentage REAL DEFAULT 50,
+      created_at TEXT NOT NULL,
       FOREIGN KEY(test_id) REFERENCES ab_tests(id) ON DELETE CASCADE
     )
   `);
@@ -167,6 +163,7 @@ db.serialize(() => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       description TEXT,
+      color TEXT DEFAULT '#3B82F6',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);

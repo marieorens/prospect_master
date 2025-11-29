@@ -111,6 +111,7 @@ class GoogleSearchScraper {
       } = options;
 
       // Construction de la requête optimisée pour les entreprises
+      // Remarque: on évite les filtres Google non supportés (ex: site:*.com) qui peuvent renvoyer 0 résultat
       let searchQuery = query;
       if (businessType) {
         searchQuery += ` ${businessType}`;
@@ -118,22 +119,18 @@ class GoogleSearchScraper {
       if (location) {
         searchQuery += ` ${location}`;
       }
-      
-      // Ajout de termes pour cibler les entreprises
-      searchQuery += ' site:linkedin.com/company OR site:*.com contact';
+
+      // Ajout de termes pour orienter vers pages pertinentes (contact/about) sans restreindre excessivement
+      searchQuery += ' (contact OR "contactez-nous" OR "à propos" OR about)';
 
       feedbackManager.updateStep(processId, `Recherche Google: "${searchQuery}"`);
 
       const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}&hl=${language}&gl=${region}`;
       
       await this.page.goto(searchUrl, { waitUntil: 'networkidle2' });
-      
-      // Gestion des cookies/GDPR si nécessaire
-      try {
-        await this.page.click('button[id*="accept"], button[id*="agree"], .QS5gu', { timeout: 3000 });
-      } catch (e) {
-        // Pas de bannière de cookies
-      }
+
+      // Gestion des cookies/GDPR si nécessaire (consentement UE)
+      await this.handleConsentIfPresent();
 
       const results = [];
       let currentPage = 1;
@@ -142,7 +139,7 @@ class GoogleSearchScraper {
       while (results.length < maxResults && currentPage <= 5) {
         feedbackManager.updateStep(processId, `Extraction des résultats - Page ${currentPage}...`);
 
-        // Extraction des résultats de la page
+        // Extraction des résultats de la page (avec sélecteurs robustes)
         const pageResults = await this.extractSearchResults();
         
         for (const result of pageResults) {
@@ -193,35 +190,127 @@ class GoogleSearchScraper {
   async extractSearchResults() {
     return await this.page.evaluate(() => {
       const results = [];
-      const searchResults = document.querySelectorAll('div.g, div[data-ved]');
 
-      searchResults.forEach(result => {
-        const titleElement = result.querySelector('h3');
-        const linkElement = result.querySelector('a[href^="http"]');
-        const snippetElement = result.querySelector('.VwiC3b, .s3v9rd, .IsZvec');
-
-        if (titleElement && linkElement) {
-          const title = titleElement.textContent.trim();
-          const url = linkElement.href;
-          const snippet = snippetElement ? snippetElement.textContent.trim() : '';
-
-          // Filtrage basique pour les entreprises
-          const isCompany = /\b(company|entreprise|société|SARL|SAS|SA|EURL|SNC|contact|about|qui sommes|équipe)\b/i.test(title + ' ' + snippet);
-          
-          if (isCompany && title && url) {
-            results.push({
-              title,
-              url,
-              snippet,
-              domain: new URL(url).hostname,
-              source: 'google_search'
-            });
-          }
+      // Essai 1: structure moderne (h3 à l'intérieur d'un lien)
+      const h3Links = Array.from(document.querySelectorAll('a h3'));
+      h3Links.forEach(h3 => {
+        const a = h3.closest('a');
+        if (!a || !a.href) return;
+        const container = a.closest('div') || document;
+        const snippetEl = container.querySelector('.VwiC3b, .s3v9rd, .IsZvec');
+        const title = h3.textContent?.trim();
+        const url = a.href;
+        const snippet = snippetEl ? snippetEl.textContent.trim() : '';
+        if (title && url) {
+          results.push({ title, url, snippet });
         }
       });
 
-      return results;
+      // Essai 2: structure alternative (ancien Google)
+      if (results.length === 0) {
+        const cards = document.querySelectorAll('div.g, div[data-ved]');
+        cards.forEach(card => {
+          const titleEl = card.querySelector('h3');
+          const linkEl = card.querySelector('a[href^="http"]');
+          const snippetEl = card.querySelector('.VwiC3b, .s3v9rd, .IsZvec');
+          if (titleEl && linkEl) {
+            const title = titleEl.textContent?.trim();
+            const url = linkEl.href;
+            const snippet = snippetEl ? snippetEl.textContent.trim() : '';
+            if (title && url) {
+              results.push({ title, url, snippet });
+            }
+          }
+        });
+      }
+
+      // Essai 3: sélecteurs souvent stables (div.yuRUbf > a)
+      if (results.length === 0) {
+        const linkCards = document.querySelectorAll('div.yuRUbf > a[href^="http"]');
+        linkCards.forEach(a => {
+          const titleEl = a.querySelector('h3');
+          const title = titleEl ? titleEl.textContent.trim() : a.textContent.trim();
+          const url = a.href;
+          const snippetEl = a.closest('div.g')?.querySelector('.VwiC3b, .s3v9rd, .IsZvec');
+          const snippet = snippetEl ? snippetEl.textContent.trim() : '';
+          if (title && url) {
+            results.push({ title, url, snippet });
+          }
+        });
+      }
+
+      // Nettoyage et enrichissement léger + filtrage souple
+      const seen = new Set();
+      const out = [];
+      for (const r of results) {
+        try {
+          const domain = new URL(r.url).hostname;
+          if (seen.has(r.url)) continue;
+          seen.add(r.url);
+
+          const text = `${r.title} ${r.snippet}`;
+          const looksCompany = /\b(company|entreprise|société|SARL|SAS|SA|EURL|SNC|contact|about|qui sommes|équipe)\b/i.test(text);
+          if (!looksCompany && !/linkedin\.com\/company/i.test(r.url)) {
+            // garder plus souple: si pas d'indice entreprise, on garde quand même quelques résultats
+          }
+
+          out.push({
+            title: r.title,
+            url: r.url,
+            snippet: r.snippet,
+            domain,
+            source: 'google_search'
+          });
+        } catch (e) {
+          // ignore URL parsing errors
+        }
+      }
+
+      return out;
     });
+  }
+
+  /**
+   * Gère l'écran de consentement Google (UE) si présent
+   */
+  async handleConsentIfPresent() {
+    try {
+      // Attendre brièvement que la modale se rende
+      await this.page.waitForTimeout(1000);
+
+      // Plusieurs sélecteurs connus
+      const selectors = [
+        '#L2AG', // Tout accepter (fr)
+        'button[aria-label*="Tout accepter"]',
+        'button[aria-label*="Accept all"]',
+        'button:has(svg + div:contains("Accept"))',
+        'button:has(svg + div:contains("J\'accepte"))',
+        'button[aria-label*="J\'accepte"]',
+        'form[action*="consent"] button'
+      ];
+
+      for (const sel of selectors) {
+        const btn = await this.page.$(sel).catch(() => null);
+        if (btn) {
+          await btn.click().catch(() => {});
+          await this.page.waitForTimeout(500);
+          break;
+        }
+      }
+
+      // Parfois l'écran est dans un iframe
+      const frames = this.page.frames();
+      for (const frame of frames) {
+        try {
+          const l2 = await frame.$('#L2AG');
+          if (l2) {
+            await l2.click();
+            await this.page.waitForTimeout(500);
+            break;
+          }
+        } catch {}
+      }
+    } catch {}
   }
 
   /**

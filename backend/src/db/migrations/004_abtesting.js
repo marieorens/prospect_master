@@ -61,20 +61,6 @@ async function createABTestingTables() {
       )
     `);
 
-    // Table des variantes
-    await dbExec(`
-      CREATE TABLE IF NOT EXISTS ab_test_variants (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        test_id TEXT NOT NULL,
-        variant_name TEXT NOT NULL,
-        subject_line TEXT NOT NULL,
-        email_content TEXT NOT NULL,
-        allocation_percentage REAL DEFAULT 50,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (test_id) REFERENCES ab_tests (id),
-        UNIQUE(test_id, variant_name)
-      )
-    `);
 
     // Table des assignations (qui reçoit quelle variante)
     await dbExec(`
