@@ -92,7 +92,7 @@ async def manual_assisted_semrush():
             await semrush_page.wait_for_selector('[data-test="searchbar_input"]', timeout=15000)
             print("✅ Search bar found")
 
-            # Fill and submit search
+            # Automatically fill the URL
             search_input = semrush_page.locator('[data-test="searchbar_input"]')
             await search_input.click()
             print("✅ Clicked on search bar")
@@ -103,41 +103,14 @@ async def manual_assisted_semrush():
             
             await search_input.fill(SEARCH_URL_TO_ENTER)
             print(f"✅ Filled search bar with: {SEARCH_URL_TO_ENTER}")
-            
-            # Wait a bit for the UI to update
-            await semrush_page.wait_for_timeout(1000)
 
-            # Try to find and click the search button
-            print("⏳ Looking for search button...")
-            search_clicked = False
-
-            # Try multiple selectors for the search button
-            selectors_to_try = [
-                'button[data-test="searchbar_search_submit"]',  # Most specific
-                'button[type="submit"]',
-                'button[aria-label*="Search"]',
-                'button:has-text("Search")',
-            ]
-
-            for selector in selectors_to_try:
-                try:
-                    button = semrush_page.locator(selector).first
-                    if await button.is_visible(timeout=2000):
-                        # Try clicking with force to ensure it works
-                        await button.click(force=True)
-                        print(f"✅ Clicked search button using selector: {selector}")
-                        search_clicked = True
-                        await semrush_page.wait_for_timeout(500)
-                        break
-                except Exception as e:
-                    continue
-
-            # Fallback to pressing Enter if button click didn't work
-            if not search_clicked:
-                print("⚠️ Search button not found, using Enter key instead...")
-                await search_input.press("Enter")
-                print("✅ Pressed Enter to start search")
-
+            # Manual step: User clicks search button
+            print("\n" + "="*60)
+            print("🔍 MANUAL STEP 3: Please click the Search button")
+            print("   The URL has been entered automatically")
+            print("   Press Enter in the terminal when search results appear...")
+            print("="*60)
+            input()
 
             # Wait for results to load
             print("\n⏳ Waiting for Semrush results to load...")
@@ -146,6 +119,8 @@ async def manual_assisted_semrush():
                 print("✅ Search results page loaded")
             except Exception:
                 print("⚠️ URL didn't change to overview page, continuing anyway...")
+
+
 
             # Wait for data to actually appear on the page
             print("⏳ Waiting for data to load (this may take 15-30 seconds)...")
